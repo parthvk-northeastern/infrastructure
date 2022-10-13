@@ -46,7 +46,7 @@ export AWS_REGION=us-east-1
 
 aws cloudformation create-stack --stack-name myvpc --template-body file://vpc.yaml --parameters ParameterKey=az1,ParameterValue=0 ParameterKey=az2,ParameterValue=1  ParameterKey=az3,ParameterValue=2
 
-aws cloudformation create-stack --stack-name myvpc --template-body file://vpc.yaml --parameters ParameterKey=az1,ParameterValue=0 ParameterKey=az2,ParameterValue=1  ParameterKey=az3,ParameterValue=2 --region us-east-1 --profile devparth 
+aws cloudformation create-stack --stack-name myvpc1 --template-body file://csye6225-infra.yml --parameters ParameterKey=az1,ParameterValue=0 ParameterKey=az2,ParameterValue=1  ParameterKey=az3,ParameterValue=2 --region us-east-1 --profile devparth 
 
 aws cloudformation create-stack --stack-name myvpc1 --template-body file://vpc.yaml --parameters ParameterKey=az1,ParameterValue=0 ParameterKey=az2,ParameterValue=1  ParameterKey=az3,ParameterValue=1 --region us-west-1 --profile dev
 
