@@ -52,4 +52,6 @@ aws cloudformation create-stack --stack-name myvpc1 --template-body file://vpc.y
 
 aws cloudformation delete-stack --stack-name myvpc1 --region us-east-1 --profile devparth
 
+aws cloudformation create-stack --stack-name myvpc2 --template-body file://csye6225-infra.yml --parameters file://params.json --region us-east-1 --profile devparth
+
 
