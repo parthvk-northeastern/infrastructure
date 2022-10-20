@@ -32,6 +32,33 @@ Parameters:
     Type: Number
     Default: 2 
 
+  KeyName:
+    Description: amazon security key
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  
+  InstanceType:
+    Description: ec2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues: [t2.micro]
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  LatestAmiId:
+    Description: Select the AMI
+    Type:  String
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  
+  RootVolumeSize:
+    Description: Give the storage Size
+    Type:  Number
+    Default: 8
+
+  RootVolumeType:
+    Description: Give the storage type
+    Type:  String
+    Default: gp2
+
 Resources:
   myVPC:
     Type: AWS::EC2::VPC
@@ -129,3 +156,47 @@ Resources:
     Properties:
       RouteTableId: !Ref myPublicRouteTable
       SubnetId: !Ref myPublicSubnet3
+
+  myInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref myVPC
+      GroupDescription: Allow http to client host
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      DisableApiTermination: false
+      SecurityGroupIds: 
+        - !Ref myInstanceSecurityGroup
+      KeyName: !Ref KeyName
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref myPublicSubnet1
+      BlockDeviceMappings:
+       - DeviceName: "/dev/sdm"
+         Ebs: 
+           VolumeSize: !Ref RootVolumeSize
+           VolumeType: !Ref RootVolumeType
+           DeleteOnTermination: true
