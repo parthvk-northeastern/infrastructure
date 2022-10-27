@@ -19,6 +19,18 @@ Parameters:
     Description: "IP Range for this subnet"
     Type: String
     Default: "10.0.2.0/24"
+  PrivateSubnet1CIDR:
+    Description: "IP Range for this subnet"
+    Type: String
+    Default: "10.0.3.0/24"
+  PrivateSubnet2CIDR:
+    Description: "IP Range for this subnet"
+    Type: String
+    Default: "10.0.4.0/24"
+  PrivateSubnet3CIDR:
+    Description: "IP Range for this subnet"
+    Type: String
+    Default: "10.0.5.0/24"
   az1:
     Description: "Region 1"
     Type: Number
@@ -31,6 +43,22 @@ Parameters:
     Description: "Region 3"
     Type: Number
     Default: 2 
+  DBName:
+    Description: DB Instance Name
+    Type: String
+    Default: nodemysql 
+  DBUserName:
+    Description: DB Instance UserName
+    Type: String
+    Default: newuser
+  DBPassword:
+    Description: DB Instance Password
+    Type: String
+    Default: newpassword
+  BucketName:
+    Description: domain Name for S3 Bucket Naming
+    Type: String
+    Default: "csye6225"
 
   KeyName:
     Description: amazon security key
@@ -58,6 +86,16 @@ Parameters:
     Description: Give the storage type
     Type:  String
     Default: gp2
+
+  ACCESSSECRET:
+    Description: access secret
+    Type:  String
+    Default: 1zyUWXb4s0JcHYq8PhveBnd3nPXFQ5Ya3pG9Qiho
+
+  ACCESSKEY:
+    Description: access key
+    Type:  String
+    Default: AKIAZPZ5TTYLTOPYRKE5
 
 Resources:
   myVPC:
@@ -120,8 +158,49 @@ Resources:
         - Key: Name
           Value: Public Subnet 3
 
+  myPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      AvailabilityZone: !Select [!Ref az1,!GetAZs ""]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet 1
+
+  myPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      AvailabilityZone: !Select [!Ref az2,!GetAZs ""]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet 2
+
+  myPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      AvailabilityZone: !Select [!Ref az3,!GetAZs ""]
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet 3
+
   #Creating Route Table
   myPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  myPrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref myVPC
@@ -157,6 +236,34 @@ Resources:
       RouteTableId: !Ref myPublicRouteTable
       SubnetId: !Ref myPublicSubnet3
 
+  #Associate private route tables with subnets
+  myPrivateubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref myPrivateRouteTable
+      SubnetId: !Ref myPrivateSubnet1
+
+  myPrivateubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref myPrivateRouteTable
+      SubnetId: !Ref myPrivateSubnet2
+
+  myPrivateubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref myPrivateRouteTable
+      SubnetId: !Ref myPrivateSubnet3
+
+  myDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet Group for RDS instances
+      SubnetIds:
+        - !Ref myPrivateSubnet1
+        - !Ref myPrivateSubnet2
+        - !Ref myPrivateSubnet3
+
   myInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -179,24 +286,155 @@ Resources:
           FromPort: 3000
           ToPort: 3000
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
 
-  EC2Instance:
+  myDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: databaseSecurityGroup
+      GroupDescription: database Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref myInstanceSecurityGroup
+        IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+      Tags:
+      - Key: Name
+        Value: application
+
+  myS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        !Join [
+          ".",
+          [
+            !Select [0, !Split [-, !Select [2, !Split [/, !Ref AWS::StackId]]]],
+            !Ref BucketName,
+          ],
+        ]
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: LifeCycleRule
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+
+  myEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: !Ref InstanceType
-      DisableApiTermination: false
-      SecurityGroupIds: 
-        - !Ref myInstanceSecurityGroup
-      KeyName: !Ref KeyName
-      ImageId: !Ref LatestAmiId
-      SubnetId: !Ref myPublicSubnet1
       BlockDeviceMappings:
-       - DeviceName: "/dev/sdm"
+       - DeviceName: /dev/sda1
          Ebs: 
            VolumeSize: !Ref RootVolumeSize
            VolumeType: !Ref RootVolumeType
            DeleteOnTermination: true
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      DisableApiTermination: false
+      KeyName: !Ref KeyName
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - !Ref myInstanceSecurityGroup
+          SubnetId: !Ref myPublicSubnet1 
+      UserData: 
+        Fn::Base64: 
+            !Sub |
+            #!/bin/bash
+            echo export host="${myRDSInstance.Endpoint.Address}" >> /etc/profile
+            echo export user="newuser" >> /etc/profile
+            echo export password="newpassword" >> /etc/profile
+            echo export BUCKET="${myS3Bucket}" >> /etc/profile
+            echo export database="nodemysql" >> /etc/profile
+            echo export aws_region="us-east-1" >> /etc/profile
+            echo export REGION="us-east-1" >> /etc/profile
+            echo export ACCESS_SECRET= "${ACCESSSECRET}">> /etc/profile
+            echo export ACCESS_KEY= "${ACCESSKEY}">> /etc/profile
+      Tags:
+        - Key: Name
+          Value: application
+
+  myRDSParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties: 
+      Description: RDS parameter Group
+      Family: mysql8.0
+      Tags: 
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  myRDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      Engine: MySQL
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      EngineVersion : 8.0.28
+      MultiAZ: false
+      StorageType: gp2
+      DBInstanceIdentifier: !Ref DBName
+      MasterUsername: !Ref DBUserName
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      PubliclyAccessible: false
+      DBName: !Ref DBName
+      DBParameterGroupName: !Ref myRDSParameterGroup
+      VPCSecurityGroups:
+        - !Ref myDBSecurityGroup
+
+  myWebAppS3IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2-CSYE6225
+      Description: IAM Role for S3
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+  myWebAppS3IAMPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WebAppS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+            - 's3:PutObject'
+            - 's3:GetObject'
+            - 's3:DeleteObject'
+            Resource:
+              -  !Sub arn:aws:s3:::${myS3Bucket}
+              -  !Sub arn:aws:s3:::${myS3Bucket}/*
+      Roles:
+      - !Ref myWebAppS3IAMRole
+
+  myEC2InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: EC2InstanceProfile
+      Path: "/"
+      Roles:
+      - !Ref myWebAppS3IAMRole
