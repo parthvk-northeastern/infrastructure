@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: 3rd assignment 
+Description: CSYE 6225 IAC 
 # Create VPC
 Parameters:
   VpcCidr:
@@ -31,6 +31,10 @@ Parameters:
     Description: "IP Range for this subnet"
     Type: String
     Default: "10.0.5.0/24"
+  PublicRouteCidrBlock:
+    Description: "Route to open Internet Access"
+    Type: String
+    Default: "0.0.0.0/0"
   az1:
     Description: "Region 1"
     Type: Number
@@ -46,7 +50,7 @@ Parameters:
   DBName:
     Description: DB Instance Name
     Type: String
-    Default: nodemysql 
+    Default: csye6225 
   DBUserName:
     Description: DB Instance UserName
     Type: String
@@ -80,7 +84,7 @@ Parameters:
   RootVolumeSize:
     Description: Give the storage Size
     Type:  Number
-    Default: 8
+    Default: 20
 
   RootVolumeType:
     Description: Give the storage type
@@ -97,17 +101,32 @@ Parameters:
     Type:  String
     Default: AKIAZPZ5TTYLTOPYRKE5
 
+  S3BucketName:
+    Description: S3 Bucket Name
+    Type: String
+    Default: parth-csye6225-neu 
+
+  envName:
+    Description: Environment Name
+    Type: String
+    Default: dev 
+
+HostedZoneName:
+    Description: "Name of the hosted zone"
+    Type: String
+    Default: "dev.parthk117.me."          
+
 Resources:
   myVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
-      EnableDnsSupport: "true"
-      EnableDnsHostnames: "true"
-      InstanceTenancy: "default"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
       Tags:
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Sub ${AWS::StackName}-VPC               
 
   # Internet Gateway
   myInternetGateway:
@@ -115,81 +134,88 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Sub ${AWS::StackName}-IGW       
 
   #Attaching VPC to Internet Gateway
   myVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref myInternetGateway
-      VpcId: !Ref myVPC
+      VpcId: !Ref myVPC        
 
   #Creating 3 public subnets in 3 different availability zones
   myPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az1,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: true      
+      AvailabilityZone: !Select [!Ref az1,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Public Subnet 1
+          Value: !Sub ${AWS::StackName}-PublicSubnet1    
 
   myPublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az2,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: true      
+      AvailabilityZone: !Select [!Ref az2,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Public Subnet 2
+          Value: !Sub ${AWS::StackName}-PublicSubnet2    
 
   myPublicSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az3,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PublicSubnet3CIDR
-      MapPublicIpOnLaunch: true
+      MapPublicIpOnLaunch: true      
+      AvailabilityZone: !Select [!Ref az3,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Public Subnet 3
+          Value: !Sub ${AWS::StackName}-PublicSubnet3     
 
+  #Creating 3 private subnets in 3 different availability zones
   myPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az1,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PrivateSubnet1CIDR
       MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [!Ref az1,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Private Subnet 1
+          Value: !Sub ${AWS::StackName}-PrivateSubnet1    
 
   myPrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az2,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [!Ref az2,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Private Subnet 2
+          Value: !Sub ${AWS::StackName}-PrivateSubnet2 
 
   myPrivateSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref myVPC
-      AvailabilityZone: !Select [!Ref az3,!GetAZs ""]
+      VpcId:
+        Ref: myVPC
       CidrBlock: !Ref PrivateSubnet3CIDR
       MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [!Ref az3,!GetAZs ""]
       Tags:
         - Key: Name
-          Value: Private Subnet 3
+          Value: !Sub ${AWS::StackName}-PrivateSubnet3 
 
   #Creating Route Table
   myPublicRouteTable:
@@ -198,7 +224,7 @@ Resources:
       VpcId: !Ref myVPC
       Tags:
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Sub ${AWS::StackName}-PublicRouteTable
 
   myPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -206,23 +232,22 @@ Resources:
       VpcId: !Ref myVPC
       Tags:
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Sub ${AWS::StackName}-PrivateRouteTable 
 
-  #Attach Route table to internet gateway
-  myPublicRoute:
+  myDefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: myVPCGatewayAttachment
     Properties:
       RouteTableId: !Ref myPublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: !Ref myInternetGateway
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myInternetGateway                
 
   #Associate public route tables with subnets
   myPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref myPublicRouteTable
-      SubnetId: !Ref myPublicSubnet1
+      SubnetId: !Ref myPublicSubnet1    
 
   myPublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -230,30 +255,30 @@ Resources:
       RouteTableId: !Ref myPublicRouteTable
       SubnetId: !Ref myPublicSubnet2
 
-  myPublicSubnet3RouteTableAssociation:
+  myPublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref myPublicRouteTable
-      SubnetId: !Ref myPublicSubnet3
+      SubnetId: !Ref myPublicSubnet2               
 
   #Associate private route tables with subnets
   myPrivateubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref myPrivateRouteTable
-      SubnetId: !Ref myPrivateSubnet1
+      SubnetId: !Ref myPrivateSubnet1   
 
   myPrivateubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref myPrivateRouteTable
-      SubnetId: !Ref myPrivateSubnet2
+      SubnetId: !Ref myPrivateSubnet2 
 
   myPrivateubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref myPrivateRouteTable
-      SubnetId: !Ref myPrivateSubnet3
+      SubnetId: !Ref myPrivateSubnet3               
 
   myDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -262,63 +287,52 @@ Resources:
       SubnetIds:
         - !Ref myPrivateSubnet1
         - !Ref myPrivateSubnet2
-        - !Ref myPrivateSubnet3
+        - !Ref myPrivateSubnet3        
 
+  #Security Group for ec2 instance
   myInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: applicationSecurityGroup
+      GroupDescription: Allow http/https/ssh connection to EC2 Instance
       VpcId: !Ref myVPC
-      GroupDescription: Allow http to client host
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
+          FromPort: '80'
+          ToPort: '80'
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
+          FromPort: '22'
+          ToPort: '22'
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: '443'
+          ToPort: '443'
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
+          FromPort: '3000'
+          ToPort: '3000'
           CidrIp: 0.0.0.0/0
 
+  #Security Group for database
   myDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: databaseSecurityGroup
-      GroupDescription: database Security Group
+      GroupDescription: Allows connection to Database
       VpcId: !Ref myVPC
       SecurityGroupIngress:
       - SourceSecurityGroupId: !Ref myInstanceSecurityGroup
         IpProtocol: tcp
         FromPort: 3306
-        ToPort: 3306
-      Tags:
-      - Key: Name
-        Value: application
+        ToPort: 3306        
 
-  myS3Bucket:
+  #S3 bucket config
+  myS3bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName:
-        !Join [
-          ".",
-          [
-            !Select [0, !Split [-, !Select [2, !Split [/, !Ref AWS::StackId]]]],
-            !Ref BucketName,
-          ],
-        ]
+      BucketName: !Join ['', [!Ref S3BucketName,'.',!Ref envName,'.parth.me' ]]
       AccessControl: Private
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -330,52 +344,50 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
+            ExpirationInDays: 60            
 
   myEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       BlockDeviceMappings:
-       - DeviceName: /dev/sda1
-         Ebs: 
-           VolumeSize: !Ref RootVolumeSize
-           VolumeType: !Ref RootVolumeType
-           DeleteOnTermination: true
-      ImageId: !Ref LatestAmiId
+        - DeviceName: /dev/sdm
+          Ebs:
+            VolumeSize: !Ref RootVolumeSize
+            VolumeType: !Ref RootVolumeType
+            DeleteOnTermination: true
       InstanceType: !Ref InstanceType
-      DisableApiTermination: false
-      KeyName: !Ref KeyName
-      NetworkInterfaces: 
-        - AssociatePublicIpAddress: "true"
-          DeleteOnTermination: "true"
-          DeviceIndex: "0"
-          GroupSet: 
-            - !Ref myInstanceSecurityGroup
-          SubnetId: !Ref myPublicSubnet1 
-      UserData: 
-        Fn::Base64: 
-            !Sub |
+      ImageId: !Ref LatestAmiId
+      SecurityGroupIds:
+        - !Ref myInstanceSecurityGroup
+      SubnetId: !Ref myPublicSubnet1
+      IamInstanceProfile: !Ref myEC2InstanceProfile
+      UserData:
+        Fn::Base64:
+          !Sub |
             #!/bin/bash
-            echo export host="${myRDSInstance.Endpoint.Address}" >> /etc/profile
-            echo export user="newuser" >> /etc/profile
-            echo export password="newpassword" >> /etc/profile
-            echo export BUCKET="${myS3Bucket}" >> /etc/profile
-            echo export database="nodemysql" >> /etc/profile
-            echo export aws_region="us-east-1" >> /etc/profile
-            echo export REGION="us-east-1" >> /etc/profile
-            echo export ACCESS_SECRET= "${ACCESSSECRET}">> /etc/profile
-            echo export ACCESS_KEY= "${ACCESSKEY}">> /etc/profile
+            cat > /etc/environment << 'EOF'
+              export user=${DBUserName}
+              export password=${DBPassword}
+              export database=${DBName}
+              export host=${myRDSInstance.Endpoint.Address}
+              export REGION=${AWS::Region}
+              export BUCKET="${S3BucketName}.${envName}.parth.me"
+            EOF
+            sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 3000
       Tags:
-        - Key: Name
-          Value: application
+        - Key: EC2
+          Value: ApplicationServer
 
   myRDSParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties: 
       Description: RDS parameter Group
       Family: mysql8.0
+      Parameters: 
+        sql_mode: IGNORE_SPACE
       Tags: 
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Ref AWS::StackName     
 
   myRDSInstance:
     Type: AWS::RDS::DBInstance
@@ -384,9 +396,7 @@ Resources:
       Engine: MySQL
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
-      EngineVersion : 8.0.28
       MultiAZ: false
-      StorageType: gp2
       DBInstanceIdentifier: !Ref DBName
       MasterUsername: !Ref DBUserName
       MasterUserPassword: !Ref DBPassword
@@ -396,12 +406,12 @@ Resources:
       DBParameterGroupName: !Ref myRDSParameterGroup
       VPCSecurityGroups:
         - !Ref myDBSecurityGroup
-
+  
   myWebAppS3IAMRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: EC2-CSYE6225
-      Description: IAM Role for S3
+      Description: IAM Role for WebApp and S3
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -411,7 +421,7 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path: /
+      Path: /      
 
   myWebAppS3IAMPolicy:
     Type: AWS::IAM::Policy
@@ -425,11 +435,12 @@ Resources:
             - 's3:PutObject'
             - 's3:GetObject'
             - 's3:DeleteObject'
-            Resource:
-              -  !Sub arn:aws:s3:::${myS3Bucket}
-              -  !Sub arn:aws:s3:::${myS3Bucket}/*
+            - 's3:ListBucket'
+            Resource: 
+                  - !Join ['', [!GetAtt 'myS3bucket.Arn' ]]
+                  - !Join ['', [!GetAtt 'myS3bucket.Arn','/*' ]]         
       Roles:
-      - !Ref myWebAppS3IAMRole
+      - !Ref myWebAppS3IAMRole      
 
   myEC2InstanceProfile: 
     Type: "AWS::IAM::InstanceProfile"
@@ -437,4 +448,14 @@ Resources:
       InstanceProfileName: EC2InstanceProfile
       Path: "/"
       Roles:
-      - !Ref myWebAppS3IAMRole
+      - !Ref myWebAppS3IAMRole       
+
+  Route53RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref HostedZoneName
+      Name: !Ref HostedZoneName
+      ResourceRecords:
+        - !GetAtt myEC2Instance.PublicIp
+      TTL: 60
+      Type: A

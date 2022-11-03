@@ -21,7 +21,7 @@
     },
     {
         "ParameterKey":"LatestAmiId",
-        "ParameterValue":"ami-0bb2a8811aa6024bf"
+        "ParameterValue":"ami-01f4b9a5d4ead21dd"
     },
     {
         "ParameterKey":"PublicSubnet1CIDR",
