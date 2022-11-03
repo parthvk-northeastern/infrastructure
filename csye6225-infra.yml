@@ -111,7 +111,7 @@ Parameters:
     Type: String
     Default: dev 
 
-HostedZoneName:
+  HostedZoneName:
     Description: "Name of the hosted zone"
     Type: String
     Default: "dev.parthk117.me."          
@@ -459,3 +459,5 @@ Resources:
         - !GetAtt myEC2Instance.PublicIp
       TTL: 60
       Type: A
+
+
