@@ -12,8 +12,10 @@ aws cloudformation create-stack --stack-name myvpcwithparam --template-body file
 aws cloudformation update-stack --stack-name myvpc --template-body file://vpc.yml
 
 ## AWS Profile
+cd ~/.aws
 
 aws configure --profile devparth
+
 
 aws configure --profile=dev
 
