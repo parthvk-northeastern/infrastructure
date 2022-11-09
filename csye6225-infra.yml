@@ -374,6 +374,11 @@ Resources:
               export BUCKET="${S3BucketName}.${envName}.parth.me"
             EOF
             sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 3000
+            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config \
+                -m ec2 \
+                -c file:/home/ubuntu/webapp/statsd/config.json \
+                -s
       Tags:
         - Key: EC2
           Value: ApplicationServer
@@ -440,7 +445,32 @@ Resources:
                   - !Join ['', [!GetAtt 'myS3bucket.Arn' ]]
                   - !Join ['', [!GetAtt 'myS3bucket.Arn','/*' ]]         
       Roles:
-      - !Ref myWebAppS3IAMRole      
+      - !Ref myWebAppS3IAMRole  
+
+  myCloudWatchAgentPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2CloudWatchPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'cloudwatch:PutMetricData'
+              - 'ec2:DescribeVolumes'
+              - 'ec2:DescribeTags'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogStreams'
+              - 'logs:DescribeLogGroups'
+              - 'logs:CreateLogStream'
+              - 'logs:CreateLogGroup'
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - 'ssm:GetParameter'
+            Resource: "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
+      Roles:
+      - !Ref myWebAppS3IAMRole     
 
   myEC2InstanceProfile: 
     Type: "AWS::IAM::InstanceProfile"
