@@ -379,6 +379,13 @@ Resources:
                 -m ec2 \
                 -c file:/home/ubuntu/webapp/statsd/config.json \
                 -s
+            cd ~/webapp
+            cd ~
+            sudo systemctl stop webapp
+            sudo systemctl daemon-reload
+            sudo systemctl start webapp
+            sudo systemctl status webapp
+            sudo systemctl enable webapp
       Tags:
         - Key: EC2
           Value: ApplicationServer
