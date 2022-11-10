@@ -60,4 +60,6 @@ aws cloudformation create-stack --stack-name myvpc --template-body file://csye62
 
 aws s3 rm s3://bucket-name --recursive
 
+assignment 7
+
 
