@@ -487,7 +487,7 @@ Resources:
       Roles:
       - !Ref myWebAppS3IAMRole       
 
-  Route53RecordSet:
+  myRoute53RecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneName: !Ref HostedZoneName
@@ -496,5 +496,166 @@ Resources:
         - !GetAtt myEC2Instance.PublicIp
       TTL: 60
       Type: A
+
+  mySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: verify_email
+      DisplayName: verify_email #for sms
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt myLambdaFunction.Arn      
+
+  mySNSPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: myApplicationSNSPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - sns:Publish
+            Resource:
+              - !Ref mySNSTopic
+      Roles:
+        - !Ref myWebAppS3IAMRole    
+
+  myLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt myLambdaRole.Arn
+      Runtime: nodejs12.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          console.log('In Lambda function');
+          exports.handler=function(event,context,callback){
+            console.log('Message from SNS');
+          };
+      Description: Function to store token in dynamodb and send email
+      FunctionName: emailVerify  
+
+  myLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+      Path: "/"         
+
+# To give sns permission to invoke lambda function
+  myLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt myLambdaFunction.Arn
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref mySNSTopic        
+
+  myDynamoDBUsernameTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "EmailID"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "EmailID"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "myDynamoUsernameTable"   
+
+  myDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "TokenName"
+          AttributeType: "S"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      KeySchema:
+        - AttributeName: "TokenName"
+          KeyType: "HASH"
+      TableName: "myDynamoTokenTable"
+      TimeToLiveSpecification:
+        AttributeName: TimeToLive
+        Enabled: true                
+
+  myDynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: DynamoPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'dynamodb:List*'
+              - 'dynamodb:DescribeReservedCapacity*'
+              - 'dynamodb:DescribeLimits'
+              - 'dynamodb:DescribeTimeToLive'
+            Resource: 
+              - '*'
+          - Effect: Allow
+            Action:
+              - 'dynamodb:PutItem'
+              - 'dynamodb:DescribeTable'
+              - 'dynamodb:Get*'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+              - 'dynamodb:Delete*'
+              - 'dynamodb:CreateTable'
+              - 'dynamodb:Update*'
+              - 'dynamodb:BatchGet*'
+            Resource:
+              - !GetAtt myDynamoDBTable.Arn
+      Roles:
+        - !Ref myWebAppS3IAMRole        
+
+  myUserNameDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "UserNameDBPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'dynamodb:List*'
+              - 'dynamodb:DescribeReservedCapacity*'
+              - 'dynamodb:DescribeLimits'
+              - 'dynamodb:DescribeTimeToLive'
+            Resource: 
+              - '*'
+          - Effect: Allow
+            Action:
+              - 'dynamodb:PutItem'
+              - 'dynamodb:DescribeTable'
+              - 'dynamodb:Get*'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+              - 'dynamodb:Delete*'
+              - 'dynamodb:CreateTable'
+              - 'dynamodb:Update*'
+              - 'dynamodb:DescribeStream'
+              - 'dynamodb:BatchGet*'
+            Resource:
+              - !GetAtt myDynamoDBUsernameTable.Arn
+      Roles:
+        - !Ref myLambdaRole        
 
 
