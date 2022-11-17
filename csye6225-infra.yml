@@ -104,7 +104,7 @@ Parameters:
   S3BucketName:
     Description: S3 Bucket Name
     Type: String
-    Default: parth-csye6225-neu 
+    Default: parth-csye-neu 
 
   envName:
     Description: Environment Name
@@ -497,6 +497,7 @@ Resources:
       TTL: 60
       Type: A
 
+# Creating SNS topic for triggering lambda function
   mySNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -506,6 +507,7 @@ Resources:
         - Protocol: lambda
           Endpoint: !GetAtt myLambdaFunction.Arn      
 
+# Attaching policy to the instance's role to provide instance with permission to publish in sns 
   mySNSPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -521,6 +523,7 @@ Resources:
       Roles:
         - !Ref myWebAppS3IAMRole    
 
+# Creating lambda function and putting hello world inline code as place holder
   myLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -536,6 +539,7 @@ Resources:
       Description: Function to store token in dynamodb and send email
       FunctionName: emailVerify  
 
+# Attaching role and policy to lambda for ses,sns and cloudwatch access
   myLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -549,9 +553,9 @@ Resources:
             Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"      
         - "arn:aws:iam::aws:policy/AmazonSESFullAccess"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
       Path: "/"         
 
@@ -564,6 +568,7 @@ Resources:
       Principal: "sns.amazonaws.com"
       SourceArn: !Ref mySNSTopic        
 
+# Creating dynamo db table for emailID and token
   myDynamoDBUsernameTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -593,8 +598,9 @@ Resources:
       TableName: "myDynamoTokenTable"
       TimeToLiveSpecification:
         AttributeName: TimeToLive
-        Enabled: true                
+        Enabled: true  
 
+# Attaching dynamo db policy to ec2 instance so that instance can read write token in dynamo db
   myDynamoDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -605,27 +611,28 @@ Resources:
           - Effect: Allow
             Action:
               - 'dynamodb:List*'
+              - 'dynamodb:DescribeTimeToLive'              
               - 'dynamodb:DescribeReservedCapacity*'
               - 'dynamodb:DescribeLimits'
-              - 'dynamodb:DescribeTimeToLive'
             Resource: 
               - '*'
           - Effect: Allow
             Action:
-              - 'dynamodb:PutItem'
               - 'dynamodb:DescribeTable'
               - 'dynamodb:Get*'
+              - 'dynamodb:PutItem'
               - 'dynamodb:Query'
               - 'dynamodb:Scan'
               - 'dynamodb:Delete*'
+              - 'dynamodb:BatchGet*'
               - 'dynamodb:CreateTable'
               - 'dynamodb:Update*'
-              - 'dynamodb:BatchGet*'
             Resource:
               - !GetAtt myDynamoDBTable.Arn
       Roles:
         - !Ref myWebAppS3IAMRole        
 
+# giving username dynamo db's permission to lambda function
   myUserNameDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -637,22 +644,22 @@ Resources:
             Action:
               - 'dynamodb:List*'
               - 'dynamodb:DescribeReservedCapacity*'
-              - 'dynamodb:DescribeLimits'
               - 'dynamodb:DescribeTimeToLive'
+              - 'dynamodb:DescribeLimits'
             Resource: 
               - '*'
           - Effect: Allow
             Action:
               - 'dynamodb:PutItem'
-              - 'dynamodb:DescribeTable'
               - 'dynamodb:Get*'
               - 'dynamodb:Query'
               - 'dynamodb:Scan'
+              - 'dynamodb:DescribeTable'              
               - 'dynamodb:Delete*'
+              - 'dynamodb:BatchGet*'              
               - 'dynamodb:CreateTable'
               - 'dynamodb:Update*'
               - 'dynamodb:DescribeStream'
-              - 'dynamodb:BatchGet*'
             Resource:
               - !GetAtt myDynamoDBUsernameTable.Arn
       Roles:
