@@ -298,24 +298,19 @@ Resources:
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: '3000'
           ToPort: '3000'
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !GetAtt myloadbalancerSecurityGroup.GroupId
 
   #Security Group for database
   myDBSecurityGroup:
+    DependsOn:  
+      - myPrivateSubnet1
+      - myPrivateSubnet2
+      - myPrivateSubnet3
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: databaseSecurityGroup
@@ -325,7 +320,7 @@ Resources:
       - SourceSecurityGroupId: !Ref myInstanceSecurityGroup
         IpProtocol: tcp
         FromPort: 3306
-        ToPort: 3306        
+        ToPort: 3306            
 
   #S3 bucket config
   myS3bucket:
@@ -346,49 +341,49 @@ Resources:
                 StorageClass: STANDARD_IA
             ExpirationInDays: 60            
 
-  myEC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      BlockDeviceMappings:
-        - DeviceName: /dev/sdm
-          Ebs:
-            VolumeSize: !Ref RootVolumeSize
-            VolumeType: !Ref RootVolumeType
-            DeleteOnTermination: true
-      InstanceType: !Ref InstanceType
-      ImageId: !Ref LatestAmiId
-      SecurityGroupIds:
-        - !Ref myInstanceSecurityGroup
-      SubnetId: !Ref myPublicSubnet1
-      IamInstanceProfile: !Ref myEC2InstanceProfile
-      UserData:
-        Fn::Base64:
-          !Sub |
-            #!/bin/bash
-            cat > /etc/environment << 'EOF'
-              export user=${DBUserName}
-              export password=${DBPassword}
-              export database=${DBName}
-              export host=${myRDSInstance.Endpoint.Address}
-              export REGION=${AWS::Region}
-              export BUCKET="${S3BucketName}.${envName}.parth.me"
-            EOF
-            sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 3000
-            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-                -a fetch-config \
-                -m ec2 \
-                -c file:/home/ubuntu/webapp/statsd/config.json \
-                -s
-            cd ~/webapp
-            cd ~
-            sudo systemctl stop webapp
-            sudo systemctl daemon-reload
-            sudo systemctl start webapp
-            sudo systemctl status webapp
-            sudo systemctl enable webapp
-      Tags:
-        - Key: EC2
-          Value: ApplicationServer
+  # myEC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/sdm
+  #         Ebs:
+  #           VolumeSize: !Ref RootVolumeSize
+  #           VolumeType: !Ref RootVolumeType
+  #           DeleteOnTermination: true
+  #     InstanceType: !Ref InstanceType
+  #     ImageId: !Ref LatestAmiId
+  #     SecurityGroupIds:
+  #       - !Ref myInstanceSecurityGroup
+  #     SubnetId: !Ref myPublicSubnet1
+  #     IamInstanceProfile: !Ref myEC2InstanceProfile
+  #     UserData:
+  #       Fn::Base64:
+  #         !Sub |
+  #           #!/bin/bash
+  #           cat > /etc/environment << 'EOF'
+  #             export user=${DBUserName}
+  #             export password=${DBPassword}
+  #             export database=${DBName}
+  #             export host=${myRDSInstance.Endpoint.Address}
+  #             export REGION=${AWS::Region}
+  #             export BUCKET="${S3BucketName}.${envName}.parth.me"
+  #           EOF
+  #           sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 3000
+  #           sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  #               -a fetch-config \
+  #               -m ec2 \
+  #               -c file:/home/ubuntu/webapp/statsd/config.json \
+  #               -s
+  #           cd ~/webapp
+  #           cd ~
+  #           sudo systemctl stop webapp
+  #           sudo systemctl daemon-reload
+  #           sudo systemctl start webapp
+  #           sudo systemctl status webapp
+  #           sudo systemctl enable webapp
+  #     Tags:
+  #       - Key: EC2
+  #         Value: ApplicationServer
 
   myRDSParameterGroup:
     Type: AWS::RDS::DBParameterGroup
@@ -409,6 +404,8 @@ Resources:
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       MultiAZ: false
+      KmsKeyId: !Ref myRDSKey    
+      StorageEncrypted: true        
       DBInstanceIdentifier: !Ref DBName
       MasterUsername: !Ref DBUserName
       MasterUserPassword: !Ref DBPassword
@@ -417,7 +414,7 @@ Resources:
       DBName: !Ref DBName
       DBParameterGroupName: !Ref myRDSParameterGroup
       VPCSecurityGroups:
-        - !Ref myDBSecurityGroup
+        - !Ref myDBSecurityGroup  
   
   myWebAppS3IAMRole:
     Type: AWS::IAM::Role
@@ -487,15 +484,29 @@ Resources:
       Roles:
       - !Ref myWebAppS3IAMRole       
 
+  # myRoute53RecordSet:
+  #   Type: AWS::Route53::RecordSet
+  #   Properties:
+  #     HostedZoneName: !Ref HostedZoneName
+  #     Name: !Ref HostedZoneName
+  #     ResourceRecords:
+  #       - !GetAtt myEC2Instance.PublicIp
+  #     TTL: 60
+  #     Type: A
+  #     AliasTarget:
+  #       HostedZoneId: !GetAtt "EC2LoadBalancer.CanonicalHostedZoneID"
+  #       DNSName: !GetAtt "EC2LoadBalancer.DNSName" 
+
   myRoute53RecordSet:
-    Type: AWS::Route53::RecordSet
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       HostedZoneName: !Ref HostedZoneName
-      Name: !Ref HostedZoneName
-      ResourceRecords:
-        - !GetAtt myEC2Instance.PublicIp
-      TTL: 60
-      Type: A
+      RecordSets:
+        - Name: !Ref HostedZoneName
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt "myEC2LoadBalancer.CanonicalHostedZoneID"
+            DNSName: !GetAtt "myEC2LoadBalancer.DNSName"      
 
 # Creating SNS topic for triggering lambda function
   mySNSTopic:
@@ -665,4 +676,223 @@ Resources:
       Roles:
         - !Ref myLambdaRole        
 
+# Create a security group for the load balancer to access the web application.
+# Add ingress rule to allow TCP traffic on ports 80, and 443 from anywhere in the world.
+  myloadbalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref myVPC
+      GroupName: LBSecurityGroup1
+      GroupDescription: "Security Group for Load Balancer"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
 
+  myautoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: "myvpc-auto-Scaling-Group"
+      AvailabilityZones:
+        - !Select [0, !GetAZs '']
+        - !Select [1, !GetAZs '']
+        - !Select [2, !GetAZs '']
+      TargetGroupARNs:
+        - !Ref myEC2TargetGroupLB
+      VPCZoneIdentifier:
+        - !Ref myPublicSubnet1
+        - !Ref myPublicSubnet2
+        - !Ref myPublicSubnet3
+      Cooldown: "60"
+      MinSize: "1"
+      MaxSize: "3"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref asglaunchconfig
+        Version: !GetAtt asglaunchconfig.LatestVersionNumber
+      DesiredCapacity: "1"
+      Tags:
+        - Key: "Name"
+          PropagateAtLaunch: true
+          Value: "EC2AutoScalingGroup"  
+
+  myUpScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref myautoScalingGroup
+      ScalingAdjustment: 1
+
+  myDownScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref myautoScalingGroup
+      ScalingAdjustment: -1       
+
+  myCPUUsageHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Trigger CPU alarm if threshold > 5
+      AlarmName: CPU Alarm High
+      Namespace: AWS/EC2
+      AlarmActions:
+        - !Ref myUpScalingPolicy
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: "300"
+      EvaluationPeriods: "1"
+      Threshold: "5"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref myautoScalingGroup
+
+  myCPUUsageLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Trigger CPU alarm if threshold is < 3
+      AlarmName: CPU Alarm Low
+      Namespace: AWS/EC2
+      AlarmActions:
+        - !Ref myDownScalingPolicy
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: "300"
+      EvaluationPeriods: "1"
+      Threshold: "3"
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref myautoScalingGroup         
+
+  asglaunchconfig:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: "/dev/sdm"
+            Ebs:
+              VolumeType: !Ref RootVolumeType
+              DeleteOnTermination: "true"
+              VolumeSize: !Ref RootVolumeSize
+              Encrypted: true
+              KmsKeyId: !Ref myEBSkey
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            DeleteOnTermination: true
+            Groups:
+              - !Ref myInstanceSecurityGroup
+        IamInstanceProfile: 
+          Arn: !GetAtt
+            - myEC2InstanceProfile
+            - Arn
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              cat > /etc/environment << 'EOF'
+                export user=${DBUserName}
+                export password=${DBPassword}
+                export database=${DBName}
+                export host=${myRDSInstance.Endpoint.Address}
+                export REGION=${AWS::Region}
+                export BUCKET="${S3BucketName}.${envName}.parth.me"
+              EOF
+              sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 3000
+              sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                  -a fetch-config \
+                  -m ec2 \
+                  -c file:/home/ubuntu/webapp/statsd/config.json \
+                  -s
+              cd ~/webapp
+              cd ~
+              sudo systemctl stop webapp
+              sudo systemctl daemon-reload
+              sudo systemctl start webapp
+              sudo systemctl status webapp
+              sudo systemctl enable webapp
+   
+  myEBSkey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: A symmetric key for encryption of EBS
+      KeyPolicy:
+        Id: key-default-ebs
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enabling Key to the resource
+            Effect: Allow
+            Principal:
+              AWS:
+                - arn:aws:iam::122596462960:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+                - arn:aws:iam::122596462960:root
+            Action: 'kms:*'
+            Resource: '*'    
+
+  myRDSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: A symmetric key for encryption of RDS
+      KeyPolicy:
+        Id: key-default-rds
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enabling Key to the resource
+            Effect: Allow
+            Principal:
+              AWS:
+                - arn:aws:iam::122596462960:root
+            Action: 'kms:*'
+            Resource: '*'             
+            
+  myEC2LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: myVPCGatewayAttachment
+    Properties:
+      IpAddressType: ipv4
+      Name: ApplicationLoadBalancer
+      Scheme: internet-facing
+      Subnets:
+        - !Ref myPublicSubnet1
+        - !Ref myPublicSubnet2
+        - !Ref myPublicSubnet3
+      SecurityGroups:
+        - !GetAtt myloadbalancerSecurityGroup.GroupId
+      Type: application    
+
+  myEC2TargetGroupLB:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /healthz
+      HealthCheckPort: 3000
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      Name: EC2AppTargetGroup
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref myVPC
+      TargetType: instance                           
+
+  myEC2LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref myEC2LoadBalancer
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref myEC2TargetGroupLB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: arn:aws:acm:us-east-1:122596462960:certificate/1259edaf-f46f-44ca-9e59-9a845cebebea
